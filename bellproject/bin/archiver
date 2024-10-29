@@ -1,0 +1,245 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'bundler/setup'
+require 'bellproject'
+require 'tty-prompt'
+require 'fileutils'
+require 'pathname'
+require 'progressbar'
+
+puts "****************************************************************"
+puts "Bell Project Archiver #{BellProject::VERSION}"
+puts "****************************************************************"
+
+ROOT = if ENV['BELLPATH']
+  ENV['BELLPATH']
+else
+  path = File.expand_path '..'
+  warn "BELLPATH not specified, using #{path}"
+  path
+end
+
+ipfs = Kubo::Client.new
+
+ARCHIVES = File.join(ROOT, 'archives')
+
+FileUtils.mkdir_p ARCHIVES
+
+prompt = TTY::Prompt.new
+choices = [
+  { key: 'n', name: 'Create or Modify An Archive', value: :create },
+  { key: 'q', name: 'Quit', value: :quit },
+]
+
+def most_recent_created_dir(path)
+  Dir.glob("#{path}/*/").max_by { |d| File.ctime(d) }
+end
+
+class Tag
+  attr_accessor :group
+  attr_accessor :value
+
+  def initialize(val)
+    spl = val.strip.split ':'
+    if spl.length == 1
+      @value = spl[0]
+    elsif spl.length == 2
+      @group = spl[0]
+      @value = spl[1]
+    else
+      raise "Invalid tag '#{tag}'"
+    end
+  end
+
+  def to_s
+    if @group.nil?
+      "#{@value}"
+    else
+      "#{@group}:#{@value}"
+    end
+  end
+
+  def ==(o)
+    o.class == self.class && o.group == @group && o.value == @value
+  end
+
+  alias_method :eql?, :==
+
+  def hash
+    [@group, @value].hash
+  end
+end
+
+
+type_tags = [
+  Tag.new('type:Software'),
+  Tag.new('type:Game'),
+  Tag.new('type:Document'),
+  Tag.new('type:OS'),
+]
+
+platform_tags = [
+  Tag.new('platform:IBM'),
+  Tag.new('platform:TRS-80'),
+  Tag.new('platform:Z100'),
+]
+
+os_tags = [
+  Tag.new('os:MS-DOS'),
+  Tag.new('os:Windows 3.1'),
+  Tag.new('os:Windows 95'),
+  Tag.new('os:Windows 98'),
+  Tag.new('os:Windows NT'),
+  Tag.new('os:Windows XP'),
+  Tag.new('os:NewDOS/80'),
+  Tag.new('os:TRS-DOS'),
+]
+
+media_tags = [
+  Tag.new('media:3.5" Floppy'),
+  Tag.new('media:5.25" Floppy'),
+  Tag.new('media:CD-ROM'),
+  Tag.new('media:DVD-ROM'),
+  Tag.new('media:unknown'),
+]
+
+
+
+
+while true
+  cmd = prompt.expand('What do you want to do?', choices)
+
+  case cmd
+  when :quit
+    exit 0
+  when :create
+    default_value = File.basename most_recent_created_dir(ARCHIVES)
+    dir = prompt.ask('Folder containing files to be archived:', value: default_value) do |d|
+      d.validate -> (t) {
+        File.directory? File.join(ARCHIVES, t)
+      }
+      d.messages[:valid?] = 'No such directory: %{value}'
+    end
+
+    ipfs_slug = File.basename(dir)
+    dir = File.join(ARCHIVES, dir)
+
+    candidates = Dir.glob("#{dir}/**/*").filter do |f|
+      base = File.basename(f)
+      File.file?(f) && base[0] != '.' && !['HASHES', 'TITLE', 'TAGS', 'index.md', 'index.html'].include?(base)
+    end
+
+    candidates = candidates.map do |f|
+      Pathname.new(f).relative_path_from(dir).to_s
+    end
+
+    selected = prompt.multi_select("Select files to be archived:", candidates, cycle: true) do |s|
+      s.default *(1..candidates.length)
+    end
+
+    hashes = File.new(File.join(dir, 'HASHES'), 'w')
+
+    ipfs_folder = Kubo::FolderNode.new(ipfs_slug)
+
+    selected.each do |f|
+      dirname, basename = File.split f
+      ipfs_folder.add_file(basename, dirname) do |mode|
+        File.open(File.join(dir, f), mode)
+      end
+    end
+
+    progress_bar = ProgressBar.create
+
+    ipfs.add(ipfs_folder) do |node, progress|
+      next unless node.ipfs_hash
+      path = File.join(ARCHIVES, node.path)
+      hashes.puts "#{node.ipfs_hash} #{Pathname.new(path).relative_path_from(dir)}"
+      puts "✓ Uploaded #{node.path}"
+    end
+
+    hashes.close
+
+    title_file = File.join(dir, 'TITLE')
+    title_value = if File.exist?(title_file)
+      File.read(title_file).strip
+    else
+      ''
+    end
+    title = prompt.ask('Archive title:', value: title_value)
+    File.write(title_file, title)
+
+    tags_file = File.join(dir, 'TAGS')
+    tags = if File.exist?(tags_file)
+      File.readlines(tags_file).filter_map do |line|
+        line = line.strip
+        next unless line.length > 0
+        next if line[0] == '#'
+        Tag.new(line)
+      end
+    else
+      []
+    end
+
+    type = prompt.select('Archive Type:', type_tags, cycle: true) do |p|
+      type_tags.each_with_index do |ty, i|
+        p.default(i + 1) if tags.include? ty
+      end
+    end
+    tags.delete_if { |t| t.group == 'type' }
+    tags << type
+
+    if type == Tag.new('type:Software') || type == Tag.new('type:Game')
+      os = prompt.multi_select('Supported OS:', os_tags, cycle: true) do |p|
+        defaults = []
+        os_tags.each_with_index do |ty, i|
+          defaults << (i + 1) if tags.include? ty
+        end
+        p.default *defaults
+      end
+      tags.delete_if { |t| t.group == 'os' }
+      tags.push *os
+    elsif type == Tag.new('type:OS')
+      platform = prompt.multi_select('Plaform:', platform_tags, cycle: true) do |p|
+        defaults = []
+        platform_tags.each_with_index do |ty, i|
+          defaults << (i + 1) if tags.include? ty
+        end
+        p.default *defaults
+      end
+      tags.delete_if { |t| t.group == 'platform' }
+      tags.push *platform
+    end
+
+    media = prompt.multi_select('Media Types:', media_tags, cycle: true) do |p|
+      defaults = []
+      media_tags.each_with_index do |ty, i|
+        defaults << (i + 1) if tags.include? ty
+      end
+      p.default *defaults
+    end
+    tags.delete_if { |t| t.group == 'media' }
+    tags.push *media
+
+    begin
+      f = File.open(tags_file, 'w')
+      tags.each do |tag|
+        f.puts tag
+      end
+      f.close
+    end
+
+    system("#{ENV['EDITOR']} '#{tags_file}'")
+
+    index_file = File.join(dir, 'index.html')
+    index_file = File.join(dir, 'index.md') unless File.exist?(index_file)
+
+    unless File.exist?(index_file)
+      f = File.open(index_file, 'w')
+      f.puts "# #{title}"
+      f.close
+    end
+
+    system("#{ENV['EDITOR']} '#{index_file}'")
+  end
+end

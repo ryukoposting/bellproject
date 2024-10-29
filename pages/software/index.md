@@ -1,0 +1,1 @@
+Software for IBM PC and compatibles.

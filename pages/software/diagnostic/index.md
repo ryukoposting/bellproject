@@ -1,0 +1,1 @@
+Diagnostic software for IBM PC and compatibles.

@@ -1,0 +1,5 @@
+<% if @name == '.' %>
+	<a class="hash-full" href="<%= ipfs_gateway_link %>">View Full Archive</a>
+<% else %>
+	<a class="hash" href="<%= ipfs_gateway_link %>"><%= @name %></a>
+<% end %>

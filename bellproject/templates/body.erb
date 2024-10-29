@@ -1,0 +1,11 @@
+<article>
+<%= @content %>
+<% if @children.length > 0 %>
+	<h1>Archive Contents</h1>
+	<ul class="hashes">
+	<% @children.sort_by { |h| h.name }.each do |h| %>
+		<li><%= h.render %></li>
+	<% end %>
+	</ul>
+<% end %>
+</article>

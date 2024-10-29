@@ -1,0 +1,10 @@
+<nav>
+<ul>
+<% @items.each do |f| %>
+	<li><%= f.render %></li>
+<% end %>
+<%if @show_updir %>
+	<li><a href="../"><small>← ..</small></a></li>
+<% end %>
+</ul>
+</nav>

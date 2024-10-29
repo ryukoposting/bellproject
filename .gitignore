@@ -1,0 +1,15 @@
+.vscode
+archives
+public/
++public/styles.css
+*.ima
+*.img
+*.iso
+*.exe
+*.bin
+*.ini
+*.inf
+*.ico
+*.EXE
+*.INI
+*.toc

@@ -1,0 +1,98 @@
+body {
+	display: flex;
+	flex-wrap: wrap;
+	font-family: sans-serif;
+	margin: 0;
+	background-color: #181818;
+	color: white;
+}
+
+header {
+	flex-basis: 100%;
+	flex-shrink: 0;
+	background-color: #19d;
+}
+
+header h1 {
+	padding-left: 0.5em;
+}
+
+article {
+	flex-basis: 60%;
+	padding-left: 1em;
+	max-width: 60em;
+}
+
+footer {
+	flex-basis: 100%;
+	flex-shrink: 0;
+}
+
+a {
+	text-decoration: none;
+}
+
+nav a,
+article a {
+	color: #19d;
+}
+
+header a {
+	color: white;
+}
+
+nav a {
+	font-weight: bold;
+}
+
+a:hover,
+a:focus {
+	text-decoration: underline;
+}
+
+
+header h1 small {
+	padding-left: 1em;
+	font-size: 50%;
+	font-style: italic;
+	font-weight: normal;
+}
+
+body>nav {
+	flex-basis: content;
+	padding-right: 1vw;
+	min-width: 16em;
+}
+
+nav ul,
+article ul.hashes {
+	display: flex;
+	flex-direction: column;
+	list-style-type: none;
+	list-style-position: outside;
+	padding-left: 1em;
+	gap: 0.2em;
+}
+
+nav li small {
+	font-weight: normal;
+}
+
+article ul.hashes .hash-full {
+	font-weight: normal;
+}
+
+article ul.hashes .hash {
+	font-weight: bold;
+}
+
+@media screen and (max-width: 800px) {
+	body>article {
+		flex-basis: content;
+		padding: 0 1em;
+	}
+
+	body>nav {
+		padding-left: 0;
+	}
+}

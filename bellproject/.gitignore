@@ -1,0 +1,16 @@
+/.bundle/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+public
+!public/styles.css
+*.img
+*.iso
+*.ima
+*.imd
+*.zip
+ipfs-api

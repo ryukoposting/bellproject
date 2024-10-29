@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require 'bellproject'
+require 'webrick'
+
+BellProject::Www.build
+
+server = WEBrick::HTTPServer.new :Port => 8000, :DocumentRoot => BellProject::Config.instance.public_path
+
+trap 'INT' do server.shutdown end
+
+server.start
