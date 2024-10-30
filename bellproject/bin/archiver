@@ -124,10 +124,14 @@ while true
 
     ipfs_slug = File.basename(dir)
     dir = File.join(ARCHIVES, dir)
+    out_dir = BellProject::Config.instance.pages_path.join(ipfs_slug)
+    done_dir = BellProject::Config.instance.done_path.join(ipfs_slug)
+
+    FileUtils.mkdir_p out_dir
 
     candidates = Dir.glob("#{dir}/**/*").filter do |f|
       base = File.basename(f)
-      File.file?(f) && base[0] != '.' && !['HASHES', 'TITLE', 'TAGS', 'index.md', 'index.html'].include?(base)
+      File.file?(f) && base[0] != '.'
     end
 
     candidates = candidates.map do |f|
@@ -138,7 +142,7 @@ while true
       s.default *(1..candidates.length)
     end
 
-    hashes = File.new(File.join(dir, 'HASHES'), 'w')
+    hashes = File.new(out_dir.join('HASHES'), 'w')
 
     ipfs_folder = Kubo::FolderNode.new(ipfs_slug)
 
@@ -149,8 +153,6 @@ while true
       end
     end
 
-    progress_bar = ProgressBar.create
-
     ipfs.add(ipfs_folder) do |node, progress|
       next unless node.ipfs_hash
       path = File.join(ARCHIVES, node.path)
@@ -160,7 +162,7 @@ while true
 
     hashes.close
 
-    title_file = File.join(dir, 'TITLE')
+    title_file = out_dir.join('TITLE')
     title_value = if File.exist?(title_file)
       File.read(title_file).strip
     else
@@ -169,7 +171,7 @@ while true
     title = prompt.ask('Archive title:', value: title_value)
     File.write(title_file, title)
 
-    tags_file = File.join(dir, 'TAGS')
+    tags_file = out_dir.join('TAGS')
     tags = if File.exist?(tags_file)
       File.readlines(tags_file).filter_map do |line|
         line = line.strip
@@ -231,8 +233,8 @@ while true
 
     system("#{ENV['EDITOR']} '#{tags_file}'")
 
-    index_file = File.join(dir, 'index.html')
-    index_file = File.join(dir, 'index.md') unless File.exist?(index_file)
+    index_file = out_dir.join('index.html')
+    index_file = out_dir.join('index.md') unless File.exist?(index_file)
 
     unless File.exist?(index_file)
       f = File.open(index_file, 'w')
@@ -241,5 +243,7 @@ while true
     end
 
     system("#{ENV['EDITOR']} '#{index_file}'")
+
+    FileUtils.mv dir, done_dir
   end
 end

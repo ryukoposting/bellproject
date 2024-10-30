@@ -30,6 +30,13 @@ module BellProject
       @archives_path
     end
 
+    def done_path
+      unless @done_path
+        @done_path = @root_path.join('done')
+      end
+      @done_path
+    end
+
     def public_path
       unless @public_path
         @public_path = @root_path.join('public')
