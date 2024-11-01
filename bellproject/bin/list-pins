@@ -1,0 +1,11 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'bundler/setup'
+require 'bellproject'
+
+ipfs = Kubo::Client.new
+
+ipfs.list_pins do |pin|
+  puts "#{pin.cid}"
+end

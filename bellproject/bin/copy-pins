@@ -1,0 +1,37 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'bundler/setup'
+require 'bellproject'
+require 'progressbar'
+
+def pin(hashes)
+  return if hashes.length == 0
+  remote = Kubo::Client.new Kubo::HttpsApi.new('ipfs.robin.lan', verify_mode: OpenSSL::SSL::VERIFY_NONE, read_timeout: 300)
+  puts "Pinning #{hashes.length} hashes"
+  remote.add_pin(hashes.to_a)
+  hashes.clear
+end
+
+hashes = Set.new
+Dir.glob(BellProject::Config.instance.pages_path.join('**/HASHES')) do |hashfile|
+  puts hashfile
+  File.readlines(hashfile).each do |line|
+    line.strip!
+    next if line.empty?
+    hash = line.split(' ', 2)[0]
+    hashes << hash
+  end
+end
+
+hashes = hashes.to_a
+until hashes.empty?
+  to_pin = hashes.pop 10
+  begin
+    pin(to_pin)
+  rescue Net::ReadTimeout
+    hashes.push *to_pin
+  end
+end
+
+pin(hashes)

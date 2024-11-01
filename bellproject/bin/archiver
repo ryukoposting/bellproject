@@ -12,25 +12,7 @@ puts "****************************************************************"
 puts "Bell Project Archiver #{BellProject::VERSION}"
 puts "****************************************************************"
 
-ROOT = if ENV['BELLPATH']
-  ENV['BELLPATH']
-else
-  path = File.expand_path '..'
-  warn "BELLPATH not specified, using #{path}"
-  path
-end
-
 ipfs = Kubo::Client.new
-
-ARCHIVES = File.join(ROOT, 'archives')
-
-FileUtils.mkdir_p ARCHIVES
-
-prompt = TTY::Prompt.new
-choices = [
-  { key: 'n', name: 'Create or Modify An Archive', value: :create },
-  { key: 'q', name: 'Quit', value: :quit },
-]
 
 def most_recent_created_dir(path)
   Dir.glob("#{path}/*/").max_by { |d| File.ctime(d) }
@@ -104,8 +86,31 @@ media_tags = [
   Tag.new('media:unknown'),
 ]
 
+class TTY::Prompt
+  def get_archive_dir(msg)
+    default_value = File.basename most_recent_created_dir(BellProject::Config.instance.archives_path)
+    self.ask(msg, value: default_value) do |d|
+      d.validate -> (t) {
+        File.directory? File.join(BellProject::Config.instance.archives_path, t)
+      }
+      d.messages[:valid?] = 'No such directory: %{value}'
+    end
+  end
 
+  def get_floppy_device(msg)
+    @default_floppy_dev = '' unless @default_floppy_dev
+    @default_floppy_dev = self.ask(msg, value: @default_floppy_dev)
+    @default_floppy_dev
+  end
+end
 
+prompt = TTY::Prompt.new
+choices = [
+  { key: 'n', name: 'Create or Modify An Archive', value: :create },
+  { key: 'a', name: 'Make a new Archive Directory', value: :mkdir },
+  { key: 'f', name: 'Image a Floppy Disk', value: :floppy },
+  { key: 'q', name: 'Quit', value: :quit },
+]
 
 while true
   cmd = prompt.expand('What do you want to do?', choices)
@@ -114,20 +119,14 @@ while true
   when :quit
     exit 0
   when :create
-    default_value = File.basename most_recent_created_dir(ARCHIVES)
-    dir = prompt.ask('Folder containing files to be archived:', value: default_value) do |d|
-      d.validate -> (t) {
-        File.directory? File.join(ARCHIVES, t)
-      }
-      d.messages[:valid?] = 'No such directory: %{value}'
-    end
-
+    dir = prompt.get_archive_dir('Choose an archive directory:')
     ipfs_slug = File.basename(dir)
-    dir = File.join(ARCHIVES, dir)
+    dir = BellProject::Config.instance.archives_path.join(ipfs_slug)
     out_dir = BellProject::Config.instance.pages_path.join(ipfs_slug)
     done_dir = BellProject::Config.instance.done_path.join(ipfs_slug)
 
     FileUtils.mkdir_p out_dir
+    FileUtils.mkdir_p done_dir
 
     candidates = Dir.glob("#{dir}/**/*").filter do |f|
       base = File.basename(f)
@@ -155,7 +154,7 @@ while true
 
     ipfs.add(ipfs_folder) do |node, progress|
       next unless node.ipfs_hash
-      path = File.join(ARCHIVES, node.path)
+      path = File.join(BellProject::Config.instance.archives_path, node.path)
       hashes.puts "#{node.ipfs_hash} #{Pathname.new(path).relative_path_from(dir)}"
       puts "✓ Uploaded #{node.path}"
     end
@@ -245,5 +244,18 @@ while true
     system("#{ENV['EDITOR']} '#{index_file}'")
 
     FileUtils.mv dir, done_dir
+  when :floppy
+    dir = prompt.get_archive_dir('Choose an archive directory:')
+    device = prompt.get_floppy_device('Floppy drive device:')
+    ipfs_slug = File.basename(dir)
+    dir = BellProject::Config.instance.archives_path.join(ipfs_slug)
+
+    name = prompt.ask('Image name:')
+    image_path = dir.join(name)
+
+    system("sudo dd if=#{device} of=#{image_path}")
+  when :mkdir
+    slug = prompt.ask('Slug:')
+    FileUtils.mkdir_p BellProject::Config.instance.archives_path.join(slug)
   end
 end
